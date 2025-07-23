@@ -26,7 +26,7 @@ RUN pnpm install --production --frozen-lockfile
 # Production stage with Alpine
 FROM node:20-alpine
 
-# Install tini for proper init
+# Install tini from Alpine packages (most reliable method)
 RUN apk add --no-cache tini
 
 # Create non-root user for runtime
@@ -49,8 +49,8 @@ ENV UV_USE_IO_URING=0
 # Optimize Node.js for container environment
 ENV NODE_OPTIONS="--enable-source-maps --max-old-space-size=512"
 
-# Use tini as init system for proper signal handling
-ENTRYPOINT ["tini", "--"]
+# Use tini as init system for proper signal handling (Alpine installs to /sbin/tini)
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["node", "index.js"]
 
 LABEL org.opencontainers.image.source=https://github.com/bluesky-social/pds

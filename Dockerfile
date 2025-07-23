@@ -29,16 +29,17 @@ RUN pnpm install --production --frozen-lockfile
 # Production stage with Debian slim for better compatibility
 FROM node:20-bookworm-slim
 
-# Install tini as a proper init system (better than dumb-init)
-# Use retries for network resilience
-RUN for i in 1 2 3; do \
-        apt-get update && \
-        apt-get install -y --no-install-recommends \
-            tini \
-            ca-certificates \
-        && break || sleep 5; \
-    done && \
-    rm -rf /var/lib/apt/lists/*
+# Install tini directly from GitHub releases (bypasses apt repository issues)
+ENV TINI_VERSION=v0.19.0
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        wget \
+    && rm -rf /var/lib/apt/lists/* \
+    && wget -O /tini https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-amd64 \
+    && wget -O /tini.sha256sum https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-amd64.sha256sum \
+    && echo "$(cat /tini.sha256sum)" | sha256sum -c - \
+    && chmod +x /tini \
+    && rm /tini.sha256sum
 
 # Create non-root user for runtime
 RUN groupadd --gid 1001 nodejs && \
@@ -61,7 +62,7 @@ ENV UV_USE_IO_URING=0
 ENV NODE_OPTIONS="--enable-source-maps --max-old-space-size=512"
 
 # Use tini as init system for proper signal handling
-ENTRYPOINT ["tini", "--"]
+ENTRYPOINT ["/tini", "--"]
 CMD ["node", "index.js"]
 
 LABEL org.opencontainers.image.source=https://github.com/bluesky-social/pds

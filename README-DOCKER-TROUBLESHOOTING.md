@@ -1,8 +1,16 @@
 # Docker Build Troubleshooting
 
+## Tini Installation Methods
+
+All Dockerfiles now use reliable tini installation methods that bypass most network issues:
+
+- **Main Dockerfile**: Direct download from GitHub releases with SHA256 checksum verification
+- **Network-fix Dockerfile**: Same as main with enhanced retry logic and DNS configuration  
+- **Alpine Dockerfile**: Uses `apk add tini` (most reliable, installs to `/sbin/tini`)
+
 ## Network Connectivity Issues
 
-If you're experiencing network connectivity issues during Docker builds (like connection timeouts to `deb.debian.org`), try these solutions in order:
+If you're still experiencing network connectivity issues during Docker builds, try these solutions in order:
 
 ### 1. Test Build Options
 
@@ -19,14 +27,14 @@ Run the test script to check which Dockerfile works in your environment:
 sudo docker build --network=host .
 ```
 
-#### Option B: Use Alternative Dockerfile
+#### Option B: Use Alternative Dockerfile  
 If the main Dockerfile fails due to network issues:
 
 ```bash
-# Alpine-based (smaller, often more reliable)
+# Alpine-based with apk tini (most reliable)
 sudo docker build -f Dockerfile.fallback .
 
-# Or network-optimized Debian version
+# Enhanced networking with GitHub tini download
 sudo docker build -f Dockerfile.network-fix .
 ```
 
@@ -92,10 +100,12 @@ pds:
 
 ## Error Patterns
 
-- **Connection timeout**: Network connectivity issue
-- **Unable to locate package**: DNS resolution or repository access issue  
+- **Connection timeout**: Network connectivity issue (try Dockerfile.fallback or Dockerfile.network-fix)
+- **Unable to locate package**: DNS resolution or repository access issue (should be rare with GitHub tini download)
 - **Certificate errors**: Time/date synchronization or CA certificate issue
 - **Permission denied**: Docker daemon not running or user not in docker group
+- **Checksum verification failed**: Corrupted tini download (retry build)
+- **wget: command not found**: Missing wget (should install automatically with ca-certificates)
 
 ## Testing Successful Build
 

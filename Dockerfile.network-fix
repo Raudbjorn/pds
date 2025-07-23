@@ -57,21 +57,27 @@ RUN echo 'Acquire::http::Timeout "300";' > /etc/apt/apt.conf.d/99-timeout && \
 RUN echo 'nameserver 8.8.8.8' > /etc/resolv.conf && \
     echo 'nameserver 8.8.4.4' >> /etc/resolv.conf
 
-# Install tini with extended retries
+# Install tini directly from GitHub releases (bypasses all apt issues)
+ENV TINI_VERSION=v0.19.0
 RUN apt-get clean && \
     rm -rf /var/lib/apt/lists/* && \
-    for i in 1 2 3 4 5; do \
-        echo "Attempt $i to install tini..." && \
+    for i in 1 2 3; do \
+        echo "Attempt $i to install prerequisites..." && \
         apt-get update -o Acquire::Check-Valid-Until=false && \
         apt-get install -y --no-install-recommends \
-            tini \
             ca-certificates \
+            wget \
         && break || { \
             echo "Attempt $i failed, retrying in 10 seconds..." && \
             sleep 10; \
         } \
     done && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    wget -O /tini https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-amd64 && \
+    wget -O /tini.sha256sum https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-amd64.sha256sum && \
+    echo "$(cat /tini.sha256sum)" | sha256sum -c - && \
+    chmod +x /tini && \
+    rm /tini.sha256sum
 
 # Create non-root user for runtime
 RUN groupadd --gid 1001 nodejs && \
@@ -94,7 +100,7 @@ ENV UV_USE_IO_URING=0
 ENV NODE_OPTIONS="--enable-source-maps --max-old-space-size=512"
 
 # Use tini as init system for proper signal handling
-ENTRYPOINT ["tini", "--"]
+ENTRYPOINT ["/tini", "--"]
 CMD ["node", "index.js"]
 
 LABEL org.opencontainers.image.source=https://github.com/Raudbjorn/pds
