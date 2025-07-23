@@ -1,12 +1,17 @@
-FROM node:20-bookworm-slim as build
+FROM node:20-bookworm-slim AS build
 
-# Install build dependencies and enable corepack
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    make \
-    g++ \
-    && rm -rf /var/lib/apt/lists/* \
-    && corepack enable
+# Install build dependencies with retries and enable corepack
+RUN for i in 1 2 3; do \
+        apt-get update && \
+        apt-get install -y --no-install-recommends \
+            python3 \
+            make \
+            g++ \
+            ca-certificates \
+        && break || sleep 5; \
+    done && \
+    rm -rf /var/lib/apt/lists/* && \
+    corepack enable
 
 # Create non-root user for build
 RUN groupadd --gid 1001 nodejs && \
@@ -25,9 +30,15 @@ RUN pnpm install --production --frozen-lockfile
 FROM node:20-bookworm-slim
 
 # Install tini as a proper init system (better than dumb-init)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    tini \
-    && rm -rf /var/lib/apt/lists/*
+# Use retries for network resilience
+RUN for i in 1 2 3; do \
+        apt-get update && \
+        apt-get install -y --no-install-recommends \
+            tini \
+            ca-certificates \
+        && break || sleep 5; \
+    done && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for runtime
 RUN groupadd --gid 1001 nodejs && \

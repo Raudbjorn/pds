@@ -1,0 +1,58 @@
+# Fallback Dockerfile for environments with network connectivity issues
+# Uses Alpine as fallback since it's smaller and often more reliable
+
+FROM node:20-alpine AS build
+
+# Install build dependencies
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    && corepack enable
+
+# Create non-root user for build
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 -G nodejs
+
+# Set up build directory
+WORKDIR /app
+COPY --chown=nodejs:nodejs ./service ./
+
+# Switch to non-root user for build
+USER nodejs
+RUN corepack prepare --activate
+RUN pnpm install --production --frozen-lockfile
+
+# Production stage with Alpine
+FROM node:20-alpine
+
+# Install tini for proper init
+RUN apk add --no-cache tini
+
+# Create non-root user for runtime
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001 -G nodejs
+
+WORKDIR /app
+
+# Copy built application with proper ownership
+COPY --from=build --chown=nodejs:nodejs /app /app
+
+# Switch to non-root user
+USER nodejs
+
+EXPOSE 3000
+ENV PDS_PORT=3000
+ENV NODE_ENV=production
+# Potential perf issues w/ io_uring on this version of node
+ENV UV_USE_IO_URING=0
+# Optimize Node.js for container environment
+ENV NODE_OPTIONS="--enable-source-maps --max-old-space-size=512"
+
+# Use tini as init system for proper signal handling
+ENTRYPOINT ["tini", "--"]
+CMD ["node", "index.js"]
+
+LABEL org.opencontainers.image.source=https://github.com/bluesky-social/pds
+LABEL org.opencontainers.image.description="AT Protocol PDS"
+LABEL org.opencontainers.image.licenses=MIT

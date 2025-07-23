@@ -1,0 +1,102 @@
+# Dockerfile with network connectivity fixes for restricted environments
+FROM node:20-bookworm-slim AS build
+
+# Configure apt to handle network issues better
+RUN echo 'Acquire::http::Timeout "300";' > /etc/apt/apt.conf.d/99-timeout && \
+    echo 'Acquire::https::Timeout "300";' >> /etc/apt/apt.conf.d/99-timeout && \
+    echo 'Acquire::ftp::Timeout "300";' >> /etc/apt/apt.conf.d/99-timeout && \
+    echo 'Acquire::Retries "3";' >> /etc/apt/apt.conf.d/99-timeout
+
+# Alternative: Use Google's DNS for better connectivity
+RUN echo 'nameserver 8.8.8.8' > /etc/resolv.conf && \
+    echo 'nameserver 8.8.4.4' >> /etc/resolv.conf
+
+# Install build dependencies with extended retries and alternative repos
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    for i in 1 2 3 4 5; do \
+        echo "Attempt $i to update package lists..." && \
+        apt-get update -o Acquire::Check-Valid-Until=false && \
+        apt-get install -y --no-install-recommends \
+            python3 \
+            make \
+            g++ \
+            ca-certificates \
+            curl \
+        && break || { \
+            echo "Attempt $i failed, retrying in 10 seconds..." && \
+            sleep 10; \
+        } \
+    done && \
+    rm -rf /var/lib/apt/lists/* && \
+    corepack enable
+
+# Create non-root user for build
+RUN groupadd --gid 1001 nodejs && \
+    useradd --uid 1001 --gid nodejs --shell /bin/bash --create-home nodejs
+
+# Set up build directory
+WORKDIR /app
+COPY --chown=nodejs:nodejs ./service ./
+
+# Switch to non-root user for build
+USER nodejs
+RUN corepack prepare --activate
+RUN pnpm install --production --frozen-lockfile
+
+# Production stage with network fixes
+FROM node:20-bookworm-slim
+
+# Configure apt for better network handling (same as build stage)
+RUN echo 'Acquire::http::Timeout "300";' > /etc/apt/apt.conf.d/99-timeout && \
+    echo 'Acquire::https::Timeout "300";' >> /etc/apt/apt.conf.d/99-timeout && \
+    echo 'Acquire::ftp::Timeout "300";' >> /etc/apt/apt.conf.d/99-timeout && \
+    echo 'Acquire::Retries "3";' >> /etc/apt/apt.conf.d/99-timeout
+
+# Use Google DNS
+RUN echo 'nameserver 8.8.8.8' > /etc/resolv.conf && \
+    echo 'nameserver 8.8.4.4' >> /etc/resolv.conf
+
+# Install tini with extended retries
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    for i in 1 2 3 4 5; do \
+        echo "Attempt $i to install tini..." && \
+        apt-get update -o Acquire::Check-Valid-Until=false && \
+        apt-get install -y --no-install-recommends \
+            tini \
+            ca-certificates \
+        && break || { \
+            echo "Attempt $i failed, retrying in 10 seconds..." && \
+            sleep 10; \
+        } \
+    done && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create non-root user for runtime
+RUN groupadd --gid 1001 nodejs && \
+    useradd --uid 1001 --gid nodejs --shell /bin/bash --create-home nodejs
+
+WORKDIR /app
+
+# Copy built application with proper ownership
+COPY --from=build --chown=nodejs:nodejs /app /app
+
+# Switch to non-root user
+USER nodejs
+
+EXPOSE 3000
+ENV PDS_PORT=3000
+ENV NODE_ENV=production
+# Potential perf issues w/ io_uring on this version of node
+ENV UV_USE_IO_URING=0
+# Optimize Node.js for container environment
+ENV NODE_OPTIONS="--enable-source-maps --max-old-space-size=512"
+
+# Use tini as init system for proper signal handling
+ENTRYPOINT ["tini", "--"]
+CMD ["node", "index.js"]
+
+LABEL org.opencontainers.image.source=https://github.com/Raudbjorn/pds
+LABEL org.opencontainers.image.description="AT Protocol PDS"
+LABEL org.opencontainers.image.licenses=MIT
