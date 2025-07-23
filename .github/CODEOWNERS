@@ -1,0 +1,13 @@
+# Global owners
+* @Raudbjorn
+
+# Docker and CI/CD
+Dockerfile @Raudbjorn
+.github/workflows/ @Raudbjorn
+compose*.yaml @Raudbjorn
+
+# Service code
+service/ @Raudbjorn
+
+# nginx configuration
+nginx/ @Raudbjorn

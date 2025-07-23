@@ -1,31 +1,57 @@
-FROM node:20.11-alpine3.18 as build
+FROM node:20-bookworm-slim as build
 
-RUN corepack enable
+# Install build dependencies and enable corepack
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/* \
+    && corepack enable
 
-# Move files into the image and install
+# Create non-root user for build
+RUN groupadd --gid 1001 nodejs && \
+    useradd --uid 1001 --gid nodejs --shell /bin/bash --create-home nodejs
+
+# Set up build directory
 WORKDIR /app
-COPY ./service ./
+COPY --chown=nodejs:nodejs ./service ./
+
+# Switch to non-root user for build
+USER nodejs
 RUN corepack prepare --activate
-RUN pnpm install --production --frozen-lockfile > /dev/null
+RUN pnpm install --production --frozen-lockfile
 
-# Uses assets from build stage to reduce build size
-FROM node:20.11-alpine3.18
+# Production stage with Debian slim for better compatibility
+FROM node:20-bookworm-slim
 
-RUN apk add --update dumb-init
+# Install tini as a proper init system (better than dumb-init)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tini \
+    && rm -rf /var/lib/apt/lists/*
 
-# Avoid zombie processes, handle signal forwarding
-ENTRYPOINT ["dumb-init", "--"]
+# Create non-root user for runtime
+RUN groupadd --gid 1001 nodejs && \
+    useradd --uid 1001 --gid nodejs --shell /bin/bash --create-home nodejs
 
 WORKDIR /app
-COPY --from=build /app /app
+
+# Copy built application with proper ownership
+COPY --from=build --chown=nodejs:nodejs /app /app
+
+# Switch to non-root user
+USER nodejs
 
 EXPOSE 3000
 ENV PDS_PORT=3000
 ENV NODE_ENV=production
-# potential perf issues w/ io_uring on this version of node
+# Potential perf issues w/ io_uring on this version of node
 ENV UV_USE_IO_URING=0
+# Optimize Node.js for container environment
+ENV NODE_OPTIONS="--enable-source-maps --max-old-space-size=512"
 
-CMD ["node", "--enable-source-maps", "index.js"]
+# Use tini as init system for proper signal handling
+ENTRYPOINT ["tini", "--"]
+CMD ["node", "index.js"]
 
 LABEL org.opencontainers.image.source=https://github.com/bluesky-social/pds
 LABEL org.opencontainers.image.description="AT Protocol PDS"

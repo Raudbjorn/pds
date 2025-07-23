@@ -1,1 +1,4 @@
 node_modules
+
+# AT Protocol source code (development reference only)
+atproto/

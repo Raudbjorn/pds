@@ -1,5 +1,8 @@
 version: '3.9'
 
+# Production compose file using pre-built images from GitHub Container Registry
+# Usage: docker compose -f compose.production.yaml up -d
+
 networks:
   pds:
     driver: bridge
@@ -32,12 +35,8 @@ services:
 
   pds:
     container_name: pds
-    # Development: Build locally
-    build:
-      context: .
-      dockerfile: Dockerfile
-    # Production: Use pre-built image (uncomment to switch)
-    # image: ghcr.io/raudbjorn/pds:latest
+    # Use the pre-built image from GitHub Container Registry
+    image: ghcr.io/raudbjorn/pds:latest
     restart: unless-stopped
     volumes:
       - type: bind
@@ -50,6 +49,9 @@ services:
     # Expose port for nginx to connect to
     expose:
       - "3000"
-    # Development environment
-    environment:
-      - NODE_ENV=development
+    # Optional: Enable tracing in production
+    # environment:
+    #   - NODE_ENV=production
+    #   - DD_ENV=production
+    #   - DD_SERVICE=pds
+    #   - DD_VERSION=latest
