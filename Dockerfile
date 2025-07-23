@@ -21,10 +21,18 @@ RUN groupadd --gid 1001 nodejs && \
 WORKDIR /app
 COPY --chown=nodejs:nodejs ./service ./
 
-# Switch to non-root user for build
+# Switch to non-root user for build and set up pnpm properly
 USER nodejs
+
+# Set up pnpm cache directory with proper permissions
+RUN mkdir -p /home/nodejs/.cache/pnpm && \
+    mkdir -p /home/nodejs/.local/share/pnpm && \
+    mkdir -p /home/nodejs/.config/pnpm
+
+# Activate corepack and install dependencies
 RUN corepack prepare --activate
-RUN pnpm install --production --frozen-lockfile
+RUN pnpm config set store-dir /home/nodejs/.cache/pnpm && \
+    pnpm install --production --frozen-lockfile
 
 # Production stage with Debian slim for better compatibility
 FROM node:20-bookworm-slim
