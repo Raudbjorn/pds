@@ -32,7 +32,7 @@ RUN mkdir -p /home/nodejs/.cache/pnpm && \
 # Activate corepack and install dependencies
 RUN corepack prepare --activate
 RUN pnpm config set store-dir /home/nodejs/.cache/pnpm && \
-    pnpm install --production --frozen-lockfile
+    pnpm install --production
 
 # Production stage with Debian slim for better compatibility
 FROM node:20-bookworm-slim
