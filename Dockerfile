@@ -67,7 +67,7 @@ ENV UV_USE_IO_URING=0
 ENV NODE_OPTIONS="--enable-source-maps --max-old-space-size=512"
 
 # Use tini as init system for proper signal handling
-ENTRYPOINT ["/tini", "--"]
+ENTRYPOINT ["/usr/local/bin/tini", "--"]
 CMD ["node", "index.js"]
 
 LABEL org.opencontainers.image.source=https://github.com/bluesky-social/pds
